@@ -16,7 +16,7 @@
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:14px/1.4 "Segoe UI",system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif}
 button,input,select,textarea{font:inherit;color:inherit}
-header{display:flex;align-items:center;gap:12px;padding:10px 18px;background:var(--panel2);border-bottom:1px solid #000}
+header{display:flex;align-items:center;gap:12px;padding:10px 18px;background:var(--panel2);border-bottom:1px solid #000;flex-wrap:wrap}
 header .logo{font-weight:800;font-size:18px;display:flex;align-items:center;gap:8px}
 header .logo span.pawn{font-size:24px;color:var(--green)}
 header .sub{color:var(--muted);font-size:12px}
@@ -139,14 +139,40 @@ details summary{cursor:pointer;color:var(--muted);font-weight:700}
 .moves .mrow{display:grid;grid-template-columns:40px 1fr 1fr;gap:2px 4px}
 .moves .var{margin:2px 0 4px 28px;padding:4px 6px 4px 8px;background:#1e1d1b;border-left:3px solid var(--green);border-radius:3px;display:flex;flex-wrap:wrap;gap:2px 4px;align-items:center}
 .moves .var .tag{color:var(--green);font-size:11px;font-weight:800;margin-right:4px}
+/* daily puzzles */
+.modes{display:flex;background:#1a1917;border-radius:8px;padding:3px;gap:2px}
+.modes button{border:0;background:transparent;color:var(--muted);font-weight:800;padding:7px 12px;border-radius:6px;cursor:pointer}
+.modes button.on{background:var(--green);color:#fff}
+.pzhead{display:flex;flex-direction:column;gap:4px}
+.pzdate{font-weight:800;font-size:16px}
+.pzstats{display:flex;gap:8px;flex-wrap:wrap}
+.pzchip{background:#1e1d1b;border-radius:99px;padding:4px 10px;font-size:12px;font-weight:700}
+.levels{display:flex;gap:6px}
+.levels button{flex:1}
+.levels button.on{background:var(--green);color:#fff}
+.pzcard{display:flex;justify-content:space-between;align-items:center;gap:8px;background:var(--panel2);border-radius:6px;padding:10px 12px;cursor:pointer}
+.pzcard:hover{background:#34322f}
+.pzcard .st{font-size:12px;font-weight:800}
+.pzcard .st.solved{color:var(--green)}
+.pzcard .st.failed{color:#ff8a7a}
+.pzstat{background:var(--panel2);border-radius:6px;padding:12px}
+.pzstat.good{box-shadow:inset 0 0 0 1px var(--green)}
+.pzstat.bad{box-shadow:inset 0 0 0 1px var(--blunder)}
+.pzmeta{margin-top:6px;color:var(--book);font-weight:700}
+.sq.hintfrom::after{content:"";position:absolute;inset:0;background:rgba(129,182,76,.5);z-index:1;pointer-events:none}
+.sq.bad::after{content:"";position:absolute;inset:0;background:rgba(250,65,45,.45);z-index:1;pointer-events:none}
 </style>
 </head>
 <body>
 <header>
   <div class="logo"><span class="pawn">♟</span> Game Review</div>
-  <div class="sub">Chess.com games · Stockfish 18 in your browser</div>
+  <nav class="modes" id="modes">
+    <button type="button" data-mode="review" class="on">Game Review</button>
+    <button type="button" data-mode="puzzles">Daily Puzzles</button>
+  </nav>
+  <div class="sub" id="headSub">Chess.com games · Stockfish 18 in your browser</div>
   <div class="spacer"></div>
-  <div class="settings">
+  <div class="settings" id="reviewSettings">
     <label>Depth <select id="depth"><option>12</option><option>14</option><option selected>16</option><option>18</option><option>20</option><option>22</option></select></label>
     <label><input type="checkbox" id="optArrow" checked> Best-move arrows</label>
     <label><input type="checkbox" id="optEngine"> Engine arrow (current)</label>
@@ -163,7 +189,7 @@ details summary{cursor:pointer;color:var(--muted);font-weight:700}
     </div>
   </div>
 
-  <div class="side">
+  <div class="side" id="sideReview">
     <div class="tabs"><button data-tab="games" class="on" id="tabGames">Games</button><button data-tab="review" id="tabReview">Review</button></div>
 
     <div class="pane on" id="pane-games">
@@ -209,6 +235,10 @@ details summary{cursor:pointer;color:var(--muted);font-weight:700}
         <div class="scroller" id="scroller"><div id="summary"></div><div class="moves" id="moves"></div></div>
       </div>
     </div>
+  </div>
+  <div class="side hidden" id="sidePuzzle">
+    <div class="tabs"><button type="button" class="on">Daily Puzzles</button></div>
+    <div class="pane on" id="puzzleBody"></div>
   </div>
 </div>
 
@@ -388,6 +418,13 @@ const S = {
   ply: 0, flipped: false, gen: 0,
   explore: null,   // alternative line; never written into the review cache
   sel: null, promo: null, drag: null,
+  mode: 'review',
+};
+const P = {
+  db: null, date: '', level: 'easy', set: null, view: 'list', err: '',
+  puzzle: null, startFen: '', startLast: null, fen: '', lastMove: null,
+  step: 0, phase: 'user', feedback: '', note: '', hint: 0, hintUsed: 0,
+  busy: false, bad: null, flipped: false, token: 0,
 };
 let exploreJob = 0;
 
@@ -396,9 +433,10 @@ const boardEl = $('board');
 function sqName(f, r){ return 'abcdefgh'[f] + (r+1); }
 function sqXY(sq){ const f = sq.charCodeAt(0)-97, r = +sq[1]-1; const flip = boardFlipped();
   return flip ? [7-f, r] : [f, 7-r]; }
-function boardFlipped(){ return S.flipped; }
+function boardFlipped(){ return S.mode === 'puzzles' ? P.flipped : S.flipped; }
 const START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 function displayed(){
+  if (S.mode === 'puzzles') return {fen: P.fen || START_FEN, move: P.lastMove, ev: null, exploring: false};
   const g = S.game;
   if (!g) return {fen: START_FEN, move: null, ev: null, exploring: false};
   const x = S.explore;
@@ -416,7 +454,7 @@ function renderBoard(){
   const ch = new Chess(fen);
   const flip = boardFlipped();
   const mv = view.move;
-  boardEl.classList.toggle('canplay', !!(g && g.done && !(S.explore && S.explore.busy)));
+  boardEl.classList.toggle('canplay', S.mode === 'puzzles' ? (P.phase === 'user' && !P.busy && !!P.puzzle) : !!(g && g.done && !(S.explore && S.explore.busy)));
   let html = '';
   for (let row = 0; row < 8; row++) for (let col = 0; col < 8; col++) {
     const f = flip ? 7-col : col, r = flip ? row : 7-row;
@@ -426,6 +464,8 @@ function renderBoard(){
     let style = '';
     if (mv && (mv.from === sq || mv.to === sq)) { cls += ' hl'; if (mv.cls) { cls += ' cls'; style = `--hlc:${HL[mv.cls]}`; } }
     if (S.sel && S.sel.from === sq) cls += ' sel';
+    if (S.mode === 'puzzles' && P.hint >= 1 && P.phase === 'user' && P.puzzle && P.puzzle.solution[P.step] && P.puzzle.solution[P.step].slice(0, 2) === sq) cls += ' hintfrom';
+    if (S.mode === 'puzzles' && P.bad && (sq === P.bad.from || sq === P.bad.to)) cls += ' bad';
     if (col === 7) cls += ' edge-r'; if (row === 0) cls += ' edge-t';
     let inner = '';
     if (col === 0) inner += `<span class="co r">${r+1}</span>`;
@@ -444,6 +484,15 @@ function renderBoard(){
   }
   html += `<svg class="arrows" viewBox="0 0 800 800">${arrowsSvg()}</svg>`;
   boardEl.innerHTML = html;
+  if (S.mode === 'puzzles') {
+    document.body.dataset.mode = 'puzzles';
+    document.body.dataset.puzzlePhase = P.phase || '';
+    document.body.dataset.puzzleStep = String(P.step || 0);
+    document.body.dataset.puzzleId = P.puzzle ? P.puzzle.id : '';
+    document.body.dataset.fen = P.fen || '';
+  } else {
+    document.body.dataset.mode = 'review';
+  }
 }
 function arrow(uci, color, op=0.85){
   if (!uci || uci.length < 4 || uci === '(none)') return '';
@@ -456,6 +505,10 @@ function arrow(uci, color, op=0.85){
   return `<polygon points="${pts.map(p=>p.map(v=>v.toFixed(1)).join(',')).join(' ')}" fill="${color}" opacity="${op}"/>`;
 }
 function arrowsSvg(){
+  if (S.mode === 'puzzles') {
+    if (P.hint >= 2 && P.phase === 'user' && P.puzzle && P.puzzle.solution[P.step]) return arrow(P.puzzle.solution[P.step], '#81b64c', 0.9);
+    return '';
+  }
   const g = S.game; if (!g || !g.evals) return '';
   const x = S.explore;
   if (x && x.idx > 0) {
@@ -498,8 +551,11 @@ function evTextSigned(ev){
   return (ev.cp >= 0 ? '+' : '') + (ev.cp/100).toFixed(2);
 }
 function renderEvalBar(){
-  const g = S.game, ev = displayed().ev;
-  const bar = $('evalbar'); bar.classList.toggle('flipped', boardFlipped());
+  const bar = $('evalbar');
+  if (S.mode === 'puzzles') { bar.classList.add('hidden'); return; }
+  bar.classList.remove('hidden');
+  const ev = displayed().ev;
+  bar.classList.toggle('flipped', boardFlipped());
   let w = ev ? winWhite(ev) : 50;
   if (ev && ev.mate == null) w = clamp(w, 4, 96);
   $('evalB').style.height = (100 - w) + '%';
@@ -521,6 +577,13 @@ function clockAt(color){
   return g.startClock;
 }
 function renderPlayers(){
+  if (S.mode === 'puzzles') {
+    const solver = P.puzzle ? new Chess(P.startFen || P.fen || START_FEN).turn() : 'w';
+    const bar = c => `<div class="av ${c}">${c==='w'?'♔':'♚'}</div><span class="nm">${P.puzzle ? (c===solver ? 'You' : 'Opponent') : (c==='w' ? 'White' : 'Black')}</span><span class="rt"></span><span class="clk"></span>`;
+    const top = boardFlipped() ? 'w' : 'b';
+    $('pTop').innerHTML = bar(top); $('pBot').innerHTML = bar(top === 'w' ? 'b' : 'w');
+    return;
+  }
   const g = S.game;
   const h = g ? g.headers : {White:'White', Black:'Black'};
   const bar = c => `<div class="av ${c}">${c==='w'?'♔':'♚'}</div><span class="nm">${esc(c==='w'?h.White||'White':h.Black||'Black')}</span><span class="rt">${(c==='w'?h.WhiteElo:h.BlackElo) ? '('+esc(c==='w'?h.WhiteElo:h.BlackElo)+')' : ''}</span><span class="clk">${fmtClock(clockAt(c))}</span>`;
@@ -642,8 +705,12 @@ function renderGraph(){
   el.innerHTML = s;
 }
 
-function renderAll(){ renderBoard(); renderEvalBar(); renderPlayers(); renderCoach(); renderMoves(); renderGraph(); renderSummary(); renderExplore(); }
+function renderAll(){
+  if (S.mode === 'puzzles') { renderBoard(); renderEvalBar(); renderPlayers(); renderPuzzle(); return; }
+  renderBoard(); renderEvalBar(); renderPlayers(); renderCoach(); renderMoves(); renderGraph(); renderSummary(); renderExplore();
+}
 function goto(p){
+  if (S.mode === 'puzzles') return;
   if (!S.game) return;
   S.sel = null; S.promo = null; hideGhost();
   S.ply = clamp(p, 0, S.game.fens.length - 1);
@@ -1155,6 +1222,7 @@ function beginMove(from, to){
 }
 function finishPromo(piece){
   const p = S.promo; if (!p) return;
+  if (S.mode === 'puzzles') { S.promo = null; S.sel = null; puzzleTry(p.from, p.to, piece); return; }
   const fen = displayed().fen;
   const ch = new Chess(fen);
   const mv = ch.move({from: p.from, to: p.to, promotion: piece});
@@ -1162,7 +1230,31 @@ function finishPromo(piece){
   if (!mv) { renderBoard(); return; }
   commitUserMove(mv, ch.fen(), fen);
 }
+function onPuzzleDown(e){
+  if (e.button != null && e.button !== 0) return;
+  const promo = e.target.closest('[data-promo]');
+  if (promo) { e.preventDefault(); finishPromo(promo.dataset.promo); return; }
+  if (S.promo) { S.promo = null; renderBoard(); }
+  if (P.phase !== 'user' || P.busy || !P.fen) return;
+  const sqEl = e.target.closest('.sq'); if (!sqEl) return;
+  const name = sqEl.dataset.sq;
+  const ch = new Chess(P.fen);
+  if (S.sel && S.sel.tos.has(name)) { puzzleTry(S.sel.from, name); return; }
+  const piece = ch.get(name);
+  if (piece && piece.color === ch.turn()) {
+    const legal = ch.moves({square: name, verbose: true});
+    if (!legal.length) { S.sel = null; renderBoard(); return; }
+    S.sel = {from: name, tos: new Set(legal.map(m => m.to)), caps: new Set(legal.filter(m => m.captured).map(m => m.to))};
+    S.drag = {pointer: e.pointerId, x: e.clientX, y: e.clientY, moved: false};
+    showGhost(piece, e.clientX, e.clientY);
+    renderBoard();
+    try { boardEl.setPointerCapture(e.pointerId); } catch (err) {}
+    return;
+  }
+  if (S.sel) { S.sel = null; hideGhost(); renderBoard(); }
+}
 function onBoardPointerDown(e){
+  if (S.mode === 'puzzles') { onPuzzleDown(e); return; }
   if (e.button != null && e.button !== 0) return;
   const promo = e.target.closest('[data-promo]');
   if (promo) { e.preventDefault(); finishPromo(promo.dataset.promo); return; }
@@ -1201,11 +1293,15 @@ function onBoardPointerMove(e){
 function onBoardPointerUp(e){
   if (!S.drag || e.pointerId !== S.drag.pointer) return;
   const moved = S.drag.moved, from = S.sel && S.sel.from;
+  const tos = S.sel && S.sel.tos;
   hideGhost();
-  if (!moved || !from || !S.sel) return;
+  if (!moved || !from || !tos) return;
   const el = document.elementFromPoint(e.clientX, e.clientY);
   const sq = el && el.closest ? el.closest('.sq') : null;
-  if (sq && S.sel.tos.has(sq.dataset.sq)) beginMove(from, sq.dataset.sq);
+  if (sq && tos.has(sq.dataset.sq)) {
+    if (S.mode === 'puzzles') puzzleTry(from, sq.dataset.sq);
+    else beginMove(from, sq.dataset.sq);
+  }
 }
 async function onVsToggle(){
   const on = $('optVsEngine').checked;
@@ -1220,9 +1316,9 @@ async function onVsToggle(){
 }
 
 /* ================= UI wiring ================= */
-function switchTab(t){ document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
-  document.querySelectorAll('.pane').forEach(p => p.classList.toggle('on', p.id === 'pane-' + t)); }
-document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => switchTab(b.dataset.tab));
+function switchTab(t){ document.querySelectorAll('#sideReview .tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
+  document.querySelectorAll('#sideReview .pane').forEach(p => p.classList.toggle('on', p.id === 'pane-' + t)); }
+document.querySelectorAll('#sideReview .tabs button').forEach(b => b.onclick = () => switchTab(b.dataset.tab));
 $('loadUser').onclick = loadUser;
 $('username').onkeydown = e => { if (e.key === 'Enter') loadUser(); };
 $('prevMonth').onclick = () => { if (S.monthIdx > 0) { S.monthIdx--; loadMonth(); } };
@@ -1269,11 +1365,19 @@ boardEl.addEventListener('pointerdown', onBoardPointerDown);
 boardEl.addEventListener('pointermove', onBoardPointerMove);
 boardEl.addEventListener('pointerup', onBoardPointerUp);
 boardEl.addEventListener('pointercancel', () => hideGhost());
-function flip(){ S.flipped = !S.flipped; renderBoard(); renderEvalBar(); renderPlayers(); }
+function flip(){
+  if (S.mode === 'puzzles') { P.flipped = !P.flipped; renderBoard(); renderPlayers(); return; }
+  S.flipped = !S.flipped; renderBoard(); renderEvalBar(); renderPlayers();
+}
 ['optArrow','optEngine'].forEach(id => $(id).onchange = renderBoard);
-$('depth').onchange = () => { localStorage.setItem('cr-depth', $('depth').value); if (S.game) startReview(S.game, S.flipped ? 'b' : 'w'); };
+$('depth').onchange = () => { localStorage.setItem('cr-depth', $('depth').value); if (S.mode === 'puzzles') return; if (S.game) startReview(S.game, S.flipped ? 'b' : 'w'); };
 document.addEventListener('keydown', e => {
   if (/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
+  if (S.mode === 'puzzles') {
+    if (e.key === 'Escape' && S.promo) { S.promo = null; renderBoard(); e.preventDefault(); }
+    else if (e.key === 'f' || e.key === 'F') flip();
+    return;
+  }
   if (e.key === 'Escape' && S.promo) { S.promo = null; renderBoard(); e.preventDefault(); return; }
   if (e.key === 'ArrowLeft') { if (!stepExplore(-1)) goto(S.ply - 1); e.preventDefault(); }
   else if (e.key === 'ArrowRight') { if (!stepExplore(1)) goto(S.ply + 1); e.preventDefault(); }
@@ -1281,6 +1385,339 @@ document.addEventListener('keydown', e => {
   else if (e.key === 'ArrowDown' || e.key === 'End') { stepEnds(true); e.preventDefault(); }
   else if (e.key === 'f' || e.key === 'F') flip();
 });
+
+/* ================= Daily puzzles ================= */
+const PZ_KEY = 'cr-pz';
+let pzFlash = 0, pzLoading = null;
+function hashStr(s){
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+}
+function mulberry32(a){
+  return function(){
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+function pickN(pool, n, seed){
+  const arr = pool.slice().sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+  const rnd = mulberry32(seed >>> 0);
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(rnd() * (i + 1));
+    const t = arr[i]; arr[i] = arr[j]; arr[j] = t;
+  }
+  return arr.slice(0, n);
+}
+function utcDate(offset){
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() + offset);
+  return d.toISOString().slice(0, 10);
+}
+function fmtDate(iso){
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString(undefined, {weekday:'long', month:'long', day:'numeric', timeZone:'UTC'});
+}
+function prettyTheme(t){
+  return String(t).replace(/([a-z])([A-Z])/g, '$1 $2').replace(/([A-Za-z])(\d)/g, '$1 $2').replace(/^[a-z]/, c => c.toUpperCase());
+}
+function levelName(id){ return id === 'easy' ? 'Easy' : id === 'medium' ? 'Medium' : 'Hard'; }
+function pzLoad(){ try { const o = JSON.parse(localStorage.getItem(PZ_KEY) || '{}'); if (!o.byDay) o.byDay = {}; return o; } catch (e) { return {byDay:{}}; } }
+function pzSave(st){ localStorage.setItem(PZ_KEY, JSON.stringify(st)); }
+function pzRec(date, id){ return (pzLoad().byDay[date] || {})[id] || null; }
+function pzWrite(date, id, patch){
+  const st = pzLoad();
+  if (!st.byDay[date]) st.byDay[date] = {};
+  const prev = st.byDay[date][id] || {status: null, hint: 0};
+  const next = {status: patch.status !== undefined ? patch.status : prev.status, hint: Math.max(prev.hint || 0, patch.hint || 0)};
+  if (prev.status === 'solved') next.status = 'solved';
+  st.byDay[date][id] = next;
+  pzSave(st);
+  return next;
+}
+function todayList(){ return P.set ? ['easy','medium','hard'].flatMap(level => P.set[level] || []) : []; }
+function dayList(date){
+  if (!P.db) return [];
+  return ['easy','medium','hard'].flatMap(level => pickN(P.db.buckets[level] || [], 2, hashStr(date + ':' + level)).map(p => Object.assign({level}, p)));
+}
+function dayComplete(date){
+  const list = dayList(date);
+  if (list.length < 6) return false;
+  const recs = pzLoad().byDay[date] || {};
+  return list.every(p => recs[p.id] && recs[p.id].status === 'solved');
+}
+function streak(){
+  if (!P.db) return 0;
+  const start = dayComplete(utcDate(0)) ? 0 : -1;
+  if (start === -1 && !dayComplete(utcDate(-1))) return 0;
+  let n = 0;
+  for (let i = start; i > -400; i--) { if (!dayComplete(utcDate(i))) break; n++; }
+  return n;
+}
+function solutionSan(p){
+  const ch = new Chess(p.fen);
+  const out = [];
+  for (const u of p.solution) {
+    const m = ch.move({from: u.slice(0, 2), to: u.slice(2, 4), promotion: u[4]});
+    if (!m) break;
+    out.push(m.san);
+  }
+  return out.join(' ');
+}
+function applyUci(uci){
+  const ch = new Chess(P.fen);
+  const mv = ch.move({from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4]});
+  if (!mv) return null;
+  P.fen = ch.fen();
+  P.lastMove = {from: mv.from, to: mv.to, san: mv.san};
+  return mv;
+}
+function resetLine(){
+  if (!P.puzzle) return;
+  P.fen = P.startFen;
+  P.lastMove = P.startLast;
+  P.step = 0;
+  P.phase = 'user';
+  P.busy = false;
+  P.feedback = '';
+  P.hint = 0;
+  P.bad = null;
+  P.note = '';
+}
+function puzzleTry(from, to, promotion){
+  if (S.mode !== 'puzzles' || !P.puzzle || P.phase !== 'user' || P.busy) return;
+  const ch = new Chess(P.fen);
+  const legal = ch.moves({square: from, verbose: true}).filter(m => m.to === to);
+  if (!legal.length) return;
+  if (!promotion && legal.some(m => m.promotion)) {
+    S.promo = {from, to, color: legal[0].color};
+    hideGhost();
+    renderBoard();
+    return;
+  }
+  const mv = ch.move({from, to, promotion: promotion || undefined});
+  if (!mv) return;
+  const uci = mv.from + mv.to + (mv.promotion || '');
+  const expect = P.puzzle.solution[P.step];
+  S.sel = null; S.promo = null; hideGhost();
+  P.note = '';
+  pzFlash++;
+  if (uci !== expect) {
+    P.feedback = 'wrong';
+    P.bad = {from, to};
+    renderBoard(); renderPuzzle();
+    const flash = pzFlash;
+    setTimeout(() => {
+      if (flash !== pzFlash) return;
+      P.bad = null;
+      if (P.feedback === 'wrong') P.feedback = '';
+      renderBoard(); renderPuzzle();
+    }, 700);
+    return;
+  }
+  P.feedback = 'right';
+  P.bad = null;
+  P.hint = 0;
+  applyUci(uci);
+  P.step++;
+  if (P.step >= P.puzzle.solution.length) { finishSolved(); return; }
+  const reply = P.puzzle.solution[P.step];
+  P.phase = 'reply';
+  P.busy = true;
+  renderBoard(); renderPuzzle();
+  const token = ++P.token;
+  setTimeout(() => {
+    if (token !== P.token || S.mode !== 'puzzles') return;
+    const played = applyUci(reply);
+    P.step++;
+    P.busy = false;
+    if (P.step >= P.puzzle.solution.length) finishSolved();
+    else {
+      P.phase = 'user';
+      P.feedback = '';
+      P.note = played ? `Opponent played ${played.san}. Your turn.` : '';
+      renderBoard(); renderPuzzle();
+    }
+  }, 450);
+}
+function finishSolved(){
+  P.phase = 'solved';
+  P.feedback = 'solved';
+  P.busy = false;
+  P.note = '';
+  const cur = pzRec(P.date, P.puzzle.id);
+  pzWrite(P.date, P.puzzle.id, {status: 'solved', hint: Math.max(P.hintUsed, (cur && cur.hint) || 0)});
+  renderBoard(); renderPuzzle(); renderPlayers();
+}
+function onHint(){
+  if (!P.puzzle || P.phase !== 'user' || P.busy) return;
+  P.hint = Math.min(2, P.hint + 1);
+  P.hintUsed = Math.max(P.hintUsed, P.hint);
+  const cur = pzRec(P.date, P.puzzle.id) || {};
+  pzWrite(P.date, P.puzzle.id, {status: cur.status || null, hint: P.hintUsed});
+  renderBoard(); renderPuzzle();
+}
+function sleep(ms){ return new Promise(r => setTimeout(r, ms)); }
+async function showSolution(){
+  if (!P.puzzle || P.phase === 'show' || P.busy) return;
+  const cur = pzRec(P.date, P.puzzle.id) || {};
+  const already = P.phase === 'solved' || cur.status === 'solved';
+  if (!already) pzWrite(P.date, P.puzzle.id, {status: 'failed', hint: Math.max(P.hintUsed, cur.hint || 0)});
+  const token = ++P.token;
+  pzFlash++;
+  P.busy = true;
+  P.phase = 'show';
+  P.hint = 0;
+  P.bad = null;
+  P.feedback = '';
+  P.note = '';
+  P.fen = P.startFen;
+  P.lastMove = P.startLast;
+  P.step = 0;
+  S.sel = null; S.promo = null; hideGhost();
+  renderBoard(); renderPuzzle();
+  for (let i = 0; i < P.puzzle.solution.length; i++) {
+    await sleep(480);
+    if (token !== P.token) return;
+    if (!applyUci(P.puzzle.solution[i])) break;
+    P.step = i + 1;
+    renderBoard();
+  }
+  if (token !== P.token) return;
+  P.busy = false;
+  P.phase = already ? 'solved' : 'failed';
+  P.feedback = P.phase;
+  renderBoard(); renderPuzzle(); renderPlayers();
+}
+function retryPuzzle(){
+  if (!P.puzzle) return;
+  P.token++;
+  pzFlash++;
+  resetLine();
+  S.sel = null; S.promo = null; hideGhost();
+  renderBoard(); renderPuzzle();
+}
+function openPuzzle(p){
+  P.token++;
+  pzFlash++;
+  P.puzzle = p;
+  P.view = 'play';
+  P.startFen = p.fen;
+  P.fen = p.fen;
+  P.startLast = p.lastMove ? {from: p.lastMove.slice(0, 2), to: p.lastMove.slice(2, 4)} : null;
+  P.lastMove = P.startLast;
+  P.step = 0;
+  P.phase = 'user';
+  P.feedback = '';
+  P.note = '';
+  P.hint = 0;
+  P.bad = null;
+  P.busy = false;
+  P.hintUsed = (pzRec(P.date, p.id) || {}).hint || 0;
+  P.flipped = new Chess(p.fen).turn() === 'b';
+  S.sel = null; S.promo = null; hideGhost();
+  renderAll();
+}
+function hintLine(){
+  if (P.phase !== 'user' || !P.hint || !P.puzzle) return '';
+  const theme = P.puzzle.themes && P.puzzle.themes[0] ? prettyTheme(P.puzzle.themes[0]) : '';
+  if (P.hint === 1) return `Hint: move the highlighted piece.${theme ? ' Theme: ' + theme + '.' : ''}`;
+  return 'Hint: the green arrow shows the destination square.';
+}
+function listHtml(){
+  const buttons = ['easy','medium','hard'].map(id => `<button type="button" class="btn${P.level===id?' on':''}" data-level="${id}">${levelName(id)}</button>`).join('');
+  const cards = (P.set[P.level] || []).map((p, i) => {
+    const rec = pzRec(P.date, p.id) || {};
+    const st = rec.status === 'solved' ? 'Solved' : rec.status === 'failed' ? 'Revealed' : rec.hint ? 'Hint used' : 'New';
+    const cls = rec.status === 'solved' ? 'solved' : rec.status === 'failed' ? 'failed' : '';
+    const extra = rec.status === 'solved' ? `<div class="muted small">${p.rating} · ${esc((p.themes||[]).map(prettyTheme).join(', ') || 'Tactics')}</div>` : '';
+    return `<div class="pzcard" data-pid="${esc(p.id)}"><div><b>${levelName(P.level)} ${i+1}</b>${extra}</div><div class="st ${cls}">${st}</div></div>`;
+  }).join('');
+  return `<div class="levels">${buttons}</div><div class="games">${cards}</div><div class="muted small">From the Lichess puzzle database (CC0). Easy is under 1300, Medium 1300–1800, Hard over 1800. Two of each, every day.</div>`;
+}
+function playHtml(){
+  const p = P.puzzle;
+  const rec = pzRec(P.date, p.id) || {};
+  const you = new Chess(p.fen).turn() === 'w' ? 'White' : 'Black';
+  let msg = '', cls = '';
+  if (P.phase === 'show') msg = 'Playing the solution…';
+  else if (P.phase === 'reply') { msg = 'Correct.'; cls = 'good'; }
+  else if (P.feedback === 'wrong') { msg = 'Not quite. Try a different move.'; cls = 'bad'; }
+  else if (P.phase === 'solved') { msg = 'Solved.'; cls = 'good'; }
+  else if (P.phase === 'failed') { msg = 'Solution revealed.'; cls = 'bad'; }
+  else if (rec.status === 'solved' && !P.note) msg = 'Solved already. Play it again, or show the solution.';
+  else msg = P.note || `Your turn — you play ${you}.`;
+  const showMeta = P.phase === 'solved' || P.phase === 'failed' || rec.status === 'solved' || rec.status === 'failed';
+  const themes = (p.themes || []).map(prettyTheme);
+  const meta = showMeta ? `<div class="pzmeta">${p.rating} · ${esc(themes.length ? themes.join(' · ') : 'Tactics')}</div>` : '';
+  const line = (P.phase === 'solved' || P.phase === 'failed') ? `<div class="line">Solution: <span class="mv">${esc(solutionSan(p))}</span></div>` : '';
+  const tip = hintLine();
+  return `<button type="button" class="btn" id="pzBack">← All puzzles</button>
+    <div class="pzstat ${cls}">${esc(msg)}${meta}${line}${tip ? `<div class="line">${esc(tip)}</div>` : ''}</div>
+    <div class="row">
+      <button type="button" class="btn" id="pzHint" ${P.phase!=='user'||P.busy||P.hint>=2?'disabled':''}>${P.hint===1?'Show square':'Hint'}</button>
+      <button type="button" class="btn" id="pzSol" ${P.phase==='show'||P.busy?'disabled':''}>Solution</button>
+      <button type="button" class="btn" id="pzRetry">Retry</button>
+    </div>
+    <div class="muted small">${esc(levelName(p.level))} · Lichess ${esc(p.id)}</div>`;
+}
+function bindPuzzle(){
+  document.querySelectorAll('#puzzleBody [data-level]').forEach(b => { b.onclick = () => { P.level = b.dataset.level; P.view = 'list'; renderPuzzle(); }; });
+  document.querySelectorAll('#puzzleBody [data-pid]').forEach(b => { b.onclick = () => { const p = todayList().find(x => x.id === b.dataset.pid); if (p) openPuzzle(p); }; });
+  const back = $('pzBack'); if (back) back.onclick = () => {
+    P.token++; pzFlash++;
+    if (P.busy) resetLine();
+    P.view = 'list';
+    S.sel = null; S.promo = null; hideGhost();
+    renderBoard(); renderPuzzle();
+  };
+  const hint = $('pzHint'); if (hint) hint.onclick = onHint;
+  const sol = $('pzSol'); if (sol) sol.onclick = () => { showSolution(); };
+  const retry = $('pzRetry'); if (retry) retry.onclick = retryPuzzle;
+}
+function renderPuzzle(){
+  const el = $('puzzleBody'); if (!el) return;
+  if (P.err) { el.innerHTML = `<div class="err">${esc(P.err)}</div>`; el.dataset.ids = ''; return; }
+  if (!P.db || !P.set) { el.innerHTML = '<div class="muted">Loading puzzles…</div>'; el.dataset.ids = ''; return; }
+  const solved = todayList().filter(p => (pzRec(P.date, p.id) || {}).status === 'solved').length;
+  const head = `<div class="pzhead"><div class="pzdate">${esc(fmtDate(P.date))} <span class="muted small">UTC</span></div><div class="muted small">Same puzzles until 00:00 UTC, then a new set.</div><div class="pzstats"><span class="pzchip">${solved}/6 solved</span><span class="pzchip">Streak ${streak()}</span></div></div>`;
+  el.innerHTML = head + (P.view === 'play' && P.puzzle ? playHtml() : listHtml());
+  el.dataset.ids = todayList().map(p => p.id).join(',');
+  el.dataset.date = P.date;
+  bindPuzzle();
+}
+async function ensurePuzzles(){
+  if (!P.db) {
+    if (!pzLoading) pzLoading = fetch('puzzles.json').then(r => { if (!r.ok) throw new Error('Could not load puzzles (' + r.status + ')'); return r.json(); }).then(db => { P.db = db; P.err = ''; }).catch(e => { P.err = e.message || 'Could not load puzzles.'; });
+    await pzLoading;
+  }
+  if (P.err || !P.db) { if (S.mode === 'puzzles') renderPuzzle(); return; }
+  const date = new Date().toISOString().slice(0, 10);
+  if (P.date !== date || !P.set) {
+    P.date = date;
+    P.set = {};
+    for (const level of ['easy','medium','hard']) P.set[level] = pickN(P.db.buckets[level] || [], 2, hashStr(date + ':' + level)).map(p => Object.assign({level}, p));
+  }
+  if (S.mode === 'puzzles') renderPuzzle();
+}
+function setMode(mode){
+  if (S.mode === mode) return;
+  P.token++;
+  pzFlash++;
+  if (P.busy && P.puzzle) resetLine();
+  S.sel = null; S.promo = null; hideGhost();
+  S.mode = mode;
+  document.querySelectorAll('#modes button').forEach(b => b.classList.toggle('on', b.dataset.mode === mode));
+  $('sideReview').classList.toggle('hidden', mode !== 'review');
+  $('sidePuzzle').classList.toggle('hidden', mode !== 'puzzles');
+  $('reviewSettings').classList.toggle('hidden', mode === 'puzzles');
+  $('headSub').textContent = mode === 'puzzles' ? 'Lichess puzzles · a new set every day' : 'Chess.com games · Stockfish 18 in your browser';
+  if (mode === 'puzzles') ensurePuzzles();
+  renderAll();
+}
+document.querySelectorAll('#modes button').forEach(b => b.onclick = () => setMode(b.dataset.mode));
 
 /* init */
 (function(){
@@ -1290,6 +1727,7 @@ document.addEventListener('keydown', e => {
   renderAll();
   loadUser();
   loadBook();
+  ensurePuzzles();
   engine.init().catch(e => console.warn('engine preload failed', e));
 })();
 </script>

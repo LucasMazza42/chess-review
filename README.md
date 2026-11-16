@@ -13,14 +13,15 @@ A single-file web app that pulls your games from Chess.com's public API and revi
 - `?user=SomeName` in the URL preloads a different Chess.com username (for example https://lucasmazza42.github.io/chess-review/?user=Hikaru).
 - Or paste any standard-chess PGN in **Paste a PGN instead**.
 - **Try a move:** once the review finishes, drag or click pieces on the board (legal moves only; promoting pawns open a piece picker). The try is classified with the same labels as the game and compared with the move that was played, for example `Your try Nf3: Excellent (+0.8) vs game move Bc4: Mistake (-0.6)`. Stockfish updates the eval bar, the best-move arrow, and the top lines. Check **Play vs engine** to let the engine answer for the other side, or leave it off and move both sides. The variation is a sub-line in the move list — step it with ← →, **Undo** takes a move back, and **Back to game** returns to the main line. Arrow keys keep working. Trying moves does not change the saved review.
+- **Daily Puzzles:** the header link next to Game Review. Each UTC day has two Easy, two Medium, and two Hard puzzles from a bundled subset of the Lichess puzzle database (CC0). Everyone gets the same set that day; the next day is a new set. You play the solving side. A correct move is kept and the opponent's reply is played for you. A wrong move is rejected so you can try again. **Hint** first highlights the piece (and a theme), then shows the destination arrow. **Solution** plays the whole line. **Retry** starts that puzzle over. Solved, revealed, and hint use are stored in this browser, with a streak of consecutive days where all six are solved. Rating and themes stay hidden until you solve the puzzle or show the solution.
 
-Needs an internet connection: Chess.com's public API, plus Stockfish, chess.js, piece images, and the opening list from CDNs (all `https://`).
+Needs an internet connection: Chess.com's public API, plus Stockfish, chess.js, piece images, and the opening list from CDNs (all `https://`). Daily Puzzles also loads `puzzles.json` from the site itself.
 
 ## Run locally
 
 - **Easiest:** double-click `index.html` (works from `file://`; tested in Chrome).
 - **Or serve it:** `./start.sh` (or `python3 -m http.server 8000` in this folder) and open http://localhost:8000.
-- The page uses only relative URLs for its own files (it is a single `index.html`) and absolute `https://` URLs for CDN assets, so it also works when the site is hosted under a subpath such as `/chess-review/`.
+- The page uses relative URLs for its own files (`index.html` and `puzzles.json`) and absolute `https://` URLs for CDN assets, so it also works when the site is hosted under a subpath such as `/chess-review/`. Opening `index.html` directly from disk still runs Game Review; Daily Puzzles needs the folder served (or the GitHub Pages site) so `puzzles.json` can load.
 
 ## Features
 
@@ -32,6 +33,7 @@ Needs an internet connection: Chess.com's public API, plus Stockfish, chess.js, 
 - Book moves + opening name from the Lichess chess-openings database (cached).
 - Keyboard: ← → step, ↑/Home start, ↓/End end, F flip.
 - Analysis is cached in localStorage per game + depth.
+- Daily Puzzles: two puzzles at Easy (under 1300), Medium (1300–1800), and Hard (over 1800), chosen from `puzzles.json` with a UTC-date seed so the set is stable all day and changes the next day. Interactive solving, two-step hints, animated solution, and a local streak. No backend.
 
 ## Limitations
 
