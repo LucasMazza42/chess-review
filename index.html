@@ -161,6 +161,21 @@ details summary{cursor:pointer;color:var(--muted);font-weight:700}
 .pzmeta{margin-top:6px;color:var(--book);font-weight:700}
 .sq.hintfrom::after{content:"";position:absolute;inset:0;background:rgba(129,182,76,.5);z-index:1;pointer-events:none}
 .sq.bad::after{content:"";position:absolute;inset:0;background:rgba(250,65,45,.45);z-index:1;pointer-events:none}
+.pznext{width:100%;min-height:48px;font-size:16px;padding:12px 16px;line-height:1.2}
+.pznextslot{display:none;margin-top:8px}
+.pzactions{display:flex;flex-wrap:wrap;gap:8px}
+.pzactions .btn{flex:1 1 30%;min-height:44px}
+.pzauto{display:flex;align-items:center;gap:8px;min-height:44px;font-size:13px;color:var(--muted);cursor:pointer}
+.pzauto input{width:18px;height:18px;accent-color:var(--green)}
+.pzkeys{color:var(--muted);font-size:12px;margin-top:4px}
+.pzdone{background:var(--panel2);border-radius:6px;padding:16px;display:flex;flex-direction:column;gap:10px}
+.pzdone h2{margin:0;font-size:22px}
+.pzdonebanner{width:100%;min-height:48px;padding:12px 14px;border-radius:6px;background:var(--green);color:#fff;font-weight:800;display:flex;justify-content:space-between;align-items:center;gap:8px}
+@media (max-width:1000px){
+  .pznextslot{display:block}
+  .side{width:100%}
+  .modes button{min-height:40px}
+}
 </style>
 </head>
 <body>
@@ -185,6 +200,7 @@ details summary{cursor:pointer;color:var(--muted);font-weight:700}
     <div class="boardstack">
       <div class="pbar" id="pTop"></div>
       <div id="board"></div>
+      <div id="pzNextSlot" class="pznextslot hidden"></div>
       <div class="pbar" id="pBot"></div>
     </div>
   </div>
@@ -708,6 +724,7 @@ function renderGraph(){
 function renderAll(){
   if (S.mode === 'puzzles') { renderBoard(); renderEvalBar(); renderPlayers(); renderPuzzle(); return; }
   renderBoard(); renderEvalBar(); renderPlayers(); renderCoach(); renderMoves(); renderGraph(); renderSummary(); renderExplore();
+  const slot = $('pzNextSlot'); if (slot) { slot.classList.add('hidden'); slot.innerHTML = ''; }
 }
 function goto(p){
   if (S.mode === 'puzzles') return;
@@ -1375,6 +1392,11 @@ document.addEventListener('keydown', e => {
   if (/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
   if (S.mode === 'puzzles') {
     if (e.key === 'Escape' && S.promo) { S.promo = null; renderBoard(); e.preventDefault(); }
+    else if (puzzleDone() && (e.key === 'Enter' || e.key === 'n' || e.key === 'N' || e.key === 'ArrowRight')) {
+      if (e.key === 'Enter' && document.activeElement && document.activeElement.tagName === 'BUTTON') return;
+      e.preventDefault();
+      nextPuzzle();
+    }
     else if (e.key === 'f' || e.key === 'F') flip();
     return;
   }
@@ -1550,6 +1572,7 @@ function finishSolved(){
   const cur = pzRec(P.date, P.puzzle.id);
   pzWrite(P.date, P.puzzle.id, {status: 'solved', hint: Math.max(P.hintUsed, (cur && cur.hint) || 0)});
   renderBoard(); renderPuzzle(); renderPlayers();
+  scheduleAuto();
 }
 function onHint(){
   if (!P.puzzle || P.phase !== 'user' || P.busy) return;
@@ -1616,6 +1639,7 @@ function openPuzzle(p){
   P.bad = null;
   P.busy = false;
   P.hintUsed = (pzRec(P.date, p.id) || {}).hint || 0;
+  P.level = p.level || P.level;
   P.flipped = new Chess(p.fen).turn() === 'b';
   S.sel = null; S.promo = null; hideGhost();
   renderAll();
@@ -1625,6 +1649,77 @@ function hintLine(){
   const theme = P.puzzle.themes && P.puzzle.themes[0] ? prettyTheme(P.puzzle.themes[0]) : '';
   if (P.hint === 1) return `Hint: move the highlighted piece.${theme ? ' Theme: ' + theme + '.' : ''}`;
   return 'Hint: the green arrow shows the destination square.';
+}
+const PZ_AUTO_KEY = 'cr-pz-auto';
+function autoAdvanceOn(){ return localStorage.getItem(PZ_AUTO_KEY) === '1'; }
+function setAutoAdvance(on){ localStorage.setItem(PZ_AUTO_KEY, on ? '1' : '0'); }
+function puzzleDone(){ return S.mode === 'puzzles' && P.view === 'play' && (P.phase === 'solved' || P.phase === 'failed'); }
+function allSolvedToday(){
+  const list = todayList();
+  return list.length === 6 && list.every(p => (pzRec(P.date, p.id) || {}).status === 'solved');
+}
+function nextUnsolvedPuzzle(){
+  const list = todayList();
+  if (!list.length || !P.puzzle) return null;
+  const idx = list.findIndex(p => p.id === P.puzzle.id);
+  const start = idx < 0 ? 0 : idx;
+  for (let i = 1; i <= list.length; i++) {
+    const p = list[(start + i) % list.length];
+    if ((pzRec(P.date, p.id) || {}).status === 'solved') continue;
+    if (p.id === P.puzzle.id) return null;
+    return p;
+  }
+  return null;
+}
+function nextLabel(){
+  if (nextUnsolvedPuzzle()) return 'Next puzzle →';
+  if (allSolvedToday()) return 'All done for today →';
+  return 'Today\'s progress →';
+}
+function scheduleAuto(){
+  if (!autoAdvanceOn() || P.phase !== 'solved') return;
+  const token = P.token;
+  setTimeout(() => {
+    if (token !== P.token || S.mode !== 'puzzles' || P.phase !== 'solved' || !autoAdvanceOn()) return;
+    nextPuzzle();
+  }, 1500);
+}
+function nextPuzzle(){
+  if (S.mode !== 'puzzles') return;
+  const nxt = nextUnsolvedPuzzle();
+  P.token++;
+  pzFlash++;
+  if (nxt) { openPuzzle(nxt); return; }
+  showDone();
+}
+function showDone(){
+  P.view = 'done';
+  P.phase = 'done';
+  P.busy = false;
+  P.hint = 0;
+  S.sel = null; S.promo = null; hideGhost();
+  renderBoard(); renderPuzzle();
+  const el = $('puzzleBody');
+  if (el && window.matchMedia('(max-width: 1000px)').matches) el.scrollIntoView({block:'start'});
+}
+function renderNextSlot(){
+  const slot = $('pzNextSlot'); if (!slot) return;
+  const playDone = puzzleDone();
+  const finished = S.mode === 'puzzles' && P.view === 'done';
+  slot.classList.toggle('hidden', !(playDone || finished));
+  if (playDone) {
+    slot.innerHTML = `<button type="button" class="btn primary pznext" id="pzNextBoard">${esc(nextLabel())}</button>`;
+    $('pzNextBoard').onclick = nextPuzzle;
+    return;
+  }
+  if (finished) {
+    const solved = todayList().filter(p => (pzRec(P.date, p.id) || {}).status === 'solved').length;
+    const title = allSolvedToday() ? 'All done for today' : solved + '/6 solved';
+    slot.innerHTML = `<button type="button" class="btn primary pznext" id="pzNextBoard">${esc(title)} · Streak ${streak()}</button>`;
+    $('pzNextBoard').onclick = () => { const el = $('puzzleBody'); if (el) el.scrollIntoView({block:'start'}); };
+    return;
+  }
+  slot.innerHTML = '';
 }
 function listHtml(){
   const buttons = ['easy','medium','hard'].map(id => `<button type="button" class="btn${P.level===id?' on':''}" data-level="${id}">${levelName(id)}</button>`).join('');
@@ -1654,14 +1749,28 @@ function playHtml(){
   const meta = showMeta ? `<div class="pzmeta">${p.rating} · ${esc(themes.length ? themes.join(' · ') : 'Tactics')}</div>` : '';
   const line = (P.phase === 'solved' || P.phase === 'failed') ? `<div class="line">Solution: <span class="mv">${esc(solutionSan(p))}</span></div>` : '';
   const tip = hintLine();
+  const done = P.phase === 'solved' || P.phase === 'failed';
+  const nextBlock = done ? `<button type="button" class="btn primary pznext" id="pzNext">${esc(nextLabel())}</button><div class="pzkeys">Enter, N, or →</div>` : '';
   return `<button type="button" class="btn" id="pzBack">← All puzzles</button>
     <div class="pzstat ${cls}">${esc(msg)}${meta}${line}${tip ? `<div class="line">${esc(tip)}</div>` : ''}</div>
-    <div class="row">
+    ${nextBlock}
+    <div class="pzactions">
       <button type="button" class="btn" id="pzHint" ${P.phase!=='user'||P.busy||P.hint>=2?'disabled':''}>${P.hint===1?'Show square':'Hint'}</button>
       <button type="button" class="btn" id="pzSol" ${P.phase==='show'||P.busy?'disabled':''}>Solution</button>
       <button type="button" class="btn" id="pzRetry">Retry</button>
     </div>
     <div class="muted small">${esc(levelName(p.level))} · Lichess ${esc(p.id)}</div>`;
+}
+function doneHtml(){
+  const list = todayList();
+  const solved = list.filter(p => (pzRec(P.date, p.id) || {}).status === 'solved').length;
+  const all = allSolvedToday();
+  return `<div class="pzdone">
+    <h2>${all ? 'All done for today' : solved + '/6 solved'}</h2>
+    <div class="pzstats"><span class="pzchip">${solved}/6 solved</span><span class="pzchip">Streak ${streak()}</span></div>
+    <div class="muted">${all ? 'A new set arrives at 00:00 UTC.' : 'Solve the rest to keep the streak going.'}</div>
+    <button type="button" class="btn" id="pzBack">← All puzzles</button>
+  </div>`;
 }
 function bindPuzzle(){
   document.querySelectorAll('#puzzleBody [data-level]').forEach(b => { b.onclick = () => { P.level = b.dataset.level; P.view = 'list'; renderPuzzle(); }; });
@@ -1676,17 +1785,22 @@ function bindPuzzle(){
   const hint = $('pzHint'); if (hint) hint.onclick = onHint;
   const sol = $('pzSol'); if (sol) sol.onclick = () => { showSolution(); };
   const retry = $('pzRetry'); if (retry) retry.onclick = retryPuzzle;
+  const next = $('pzNext'); if (next) next.onclick = nextPuzzle;
+  const auto = $('pzAuto');
+  if (auto) { auto.checked = autoAdvanceOn(); auto.onchange = () => setAutoAdvance(auto.checked); }
 }
 function renderPuzzle(){
   const el = $('puzzleBody'); if (!el) return;
   if (P.err) { el.innerHTML = `<div class="err">${esc(P.err)}</div>`; el.dataset.ids = ''; return; }
   if (!P.db || !P.set) { el.innerHTML = '<div class="muted">Loading puzzles…</div>'; el.dataset.ids = ''; return; }
   const solved = todayList().filter(p => (pzRec(P.date, p.id) || {}).status === 'solved').length;
-  const head = `<div class="pzhead"><div class="pzdate">${esc(fmtDate(P.date))} <span class="muted small">UTC</span></div><div class="muted small">Same puzzles until 00:00 UTC, then a new set.</div><div class="pzstats"><span class="pzchip">${solved}/6 solved</span><span class="pzchip">Streak ${streak()}</span></div></div>`;
-  el.innerHTML = head + (P.view === 'play' && P.puzzle ? playHtml() : listHtml());
+  const head = `<div class="pzhead"><div class="pzdate">${esc(fmtDate(P.date))} <span class="muted small">UTC</span></div><div class="muted small">Same puzzles until 00:00 UTC, then a new set.</div><div class="pzstats"><span class="pzchip">${solved}/6 solved</span><span class="pzchip">Streak ${streak()}</span></div><label class="pzauto"><input type="checkbox" id="pzAuto"> Auto-advance</label></div>`;
+  el.innerHTML = head + (P.view === 'done' ? doneHtml() : P.view === 'play' && P.puzzle ? playHtml() : listHtml());
   el.dataset.ids = todayList().map(p => p.id).join(',');
   el.dataset.date = P.date;
+  document.body.dataset.puzzleView = P.view || '';
   bindPuzzle();
+  renderNextSlot();
 }
 async function ensurePuzzles(){
   if (!P.db) {
