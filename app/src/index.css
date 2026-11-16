@@ -1,0 +1,14 @@
+:root {
+  --bg: #312e2b; --panel: #262522; --panel2: #21201d; --line: #3c3a37; --text: #e8e6e3; --muted: #9e9b98;
+  --green: #81b64c; --green-d: #45753c;
+  --brilliant: #26c2a3; --great: #749bbf; --best: #81b64c; --excellent: #81b64c; --good: #95b776;
+  --book: #d5a47d; --inaccuracy: #f7c631; --mistake: #ffa459; --miss: #ff7769; --blunder: #fa412d;
+  --safe-b: env(safe-area-inset-bottom); --safe-t: env(safe-area-inset-top);
+}
+* { box-sizing: border-box; }
+html, body, #root { margin: 0; min-height: 100%; background: var(--bg); color: var(--text); }
+html, body { overflow-x: hidden; max-width: 100%; }
+body { font: 15px/1.4 "Segoe UI", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { touch-action: manipulation; }
+img { max-width: 100%; }

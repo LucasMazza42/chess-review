@@ -2,7 +2,9 @@
 
 **Live:** https://lucasmazza42.github.io/chess-review/
 
-A single-file web app that pulls your games from Chess.com's public API and reviews them with Stockfish 18 running in your browser.
+The site GitHub Pages is serving today is still the single-file app at the root of `main` (`index.html`). A Vite + React + TypeScript rebuild lives in [`app/`](app/) and is published to the `gh-pages` branch by GitHub Actions. It is not what the live URL shows until the Pages source is switched (see below).
+
+The root app pulls games from Chess.com's public API and reviews them with Stockfish 18 running in your browser.
 
 ![Game Review](screenshot.png)
 
@@ -17,7 +19,36 @@ A single-file web app that pulls your games from Chess.com's public API and revi
 
 Needs an internet connection: Chess.com's public API, plus Stockfish, chess.js, piece images, and the opening list from CDNs (all `https://`). Daily Puzzles also loads `puzzles.json` from the site itself.
 
-## Run locally
+## React app
+
+Source is in `app/` (Vite, React, TypeScript, chess.js, react-chessboard). Stockfish still runs in a blob web worker. `app/public/puzzles.json` is the same daily-puzzle set as the root `puzzles.json`. The production base path is `/chess-review/`.
+
+```bash
+cd app
+npm install
+npm run dev
+```
+
+Open http://127.0.0.1:5173/chess-review/ . `npm run build` writes `app/dist/`. `npm run preview` serves that build.
+
+On a phone the board uses the full width, moves are tap or drag, Review and Puzzles sit in a bottom tab bar, and the coach and move list collapse under the board. On a wide screen the board stays on the left and the panels on the right. `app/public/manifest.webmanifest` lets the built site be added to a home screen. It is not an offline app: Chess.com, Stockfish, and the opening book still need the network.
+
+Review analysis is still cached as `cr2:<game id>:<depth>`. The opening book is cached as `cr-book-v3` because the React app uses chess.js 1, whose FEN en-passant field does not match the chess.js 0.10.3 book (`cr-book-v2`). Puzzle progress keys are unchanged (`cr-pz`, `cr-pz-auto`).
+
+### Switching GitHub Pages to the React build
+
+Pages is still set to deploy from the `main` branch, and this repo's token cannot change that. After the **Deploy React app** workflow has published the `gh-pages` branch:
+
+1. Open the repository on GitHub → **Settings** → **Pages**.
+2. Under **Build and deployment**, set **Source** to **Deploy from a branch**.
+3. Set **Branch** to `gh-pages` and **Folder** to `/ (root)`.
+4. Save.
+
+https://lucasmazza42.github.io/chess-review/ then serves the React app. Until that save, the URL keeps serving `main`'s root `index.html`.
+
+If the workflow fails with "refusing to allow a GitHub App to create or update workflow" or a 403 when pushing `gh-pages`: **Settings** → **Actions** → **General** → **Workflow permissions** → **Read and write permissions** → Save, then re-run **Deploy React app**.
+
+## Run locally (current live site)
 
 - **Easiest:** double-click `index.html` (works from `file://`; tested in Chrome).
 - **Or serve it:** `./start.sh` (or `python3 -m http.server 8000` in this folder) and open http://localhost:8000.

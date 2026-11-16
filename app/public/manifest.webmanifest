@@ -1,0 +1,14 @@
+{
+  "name": "Game Review",
+  "short_name": "Review",
+  "description": "Chess.com game review and daily puzzles, with Stockfish in your browser.",
+  "start_url": "/chess-review/",
+  "scope": "/chess-review/",
+  "display": "standalone",
+  "background_color": "#312e2b",
+  "theme_color": "#21201d",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
