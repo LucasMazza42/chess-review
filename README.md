@@ -28,8 +28,8 @@ Needs an internet connection: Chess.com's public API, plus Stockfish, chess.js, 
 - Chess.com username (default LucasMazza) → monthly archives with ‹ › month navigation; list shows color, opponent + rating, your rating, result, time control, date. Click to review. Or paste any PGN.
 - Stockfish 18 (lite NNUE, single-threaded WASM from unpkg) in a blob Web Worker; no COOP/COEP headers needed. Depth selectable (default 16) with a 5 s per-position cap.
 - Move classifications: Brilliant, Great, Best, Excellent, Good, Book, Inaccuracy, Mistake, Miss, Blunder (from win-% loss, Lichess win% formula, mates handled).
-- Accuracy per player (Lichess formula), classification counts per player, and Chess.com's own accuracy shown alongside when the API provides it.
-- Board with move highlights tinted by classification, classification badge, green "best move" arrow when you missed it, optional blue engine arrow for the current position, eval bar, clickable eval graph, move list with icons, coach box ("X was best", best line, engine continuation, win-% change), clocks from the PGN.
+- Accuracy per player (Lichess formula), classification counts per player, and Chess.com's own accuracy shown alongside when the API provides it. Click a player's count to jump to that move; click the same count again to cycle through them (a small `1/3` marks the one you're on). Zero counts stay dimmed.
+- Board with move highlights tinted by classification, classification badge, green "best move" arrow when you missed it, optional blue engine arrow for the current position, eval bar, clickable eval graph with colored dots for blunders, mistakes, and other key moves, move list with icons, coach box ("X was best", best line, engine continuation, win-% change), clocks from the PGN.
 - Book moves + opening name from the Lichess chess-openings database (cached).
 - Keyboard: ← → step, ↑/Home start, ↓/End end, F flip.
 - Analysis is cached in localStorage per game + depth.

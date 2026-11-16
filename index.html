@@ -93,8 +93,15 @@ details summary{cursor:pointer;color:var(--muted);font-weight:700}
 .line .mv{color:var(--text)}
 .sumtbl{width:100%;border-collapse:collapse}
 .sumtbl td{padding:3px 4px}
-.sumtbl td.c{text-align:center;font-weight:800;width:70px}
+.sumtbl td.c{text-align:center;font-weight:800;width:84px}
 .sumtbl tr.acc td{padding:8px 4px}
+.clsjump{appearance:none;-webkit-appearance:none;border:0;background:transparent;color:inherit;font:inherit;font-weight:800;min-width:44px;min-height:44px;border-radius:5px;padding:4px 6px;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.05;gap:1px}
+.clsjump:not(:disabled){cursor:pointer}
+.clsjump:not(:disabled):hover{background:rgba(255,255,255,.08)}
+.clsjump:not(:disabled):active{background:rgba(255,255,255,.16)}
+.clsjump:disabled{opacity:.35;cursor:default}
+.clsjump .k{font-size:10px;font-weight:700;color:var(--muted)}
+.graph .gdot{cursor:pointer}
 .accbox{display:inline-block;background:#fff;color:#222;border-radius:5px;padding:6px 10px;font-size:20px;font-weight:900;min-width:64px}
 .accbox.b{background:#403d39;color:#fff}
 .lab{display:flex;align-items:center;gap:8px}
@@ -691,18 +698,44 @@ function renderMoves(){
     if (cr.bottom > sr.bottom) sc.scrollTop += cr.bottom - sr.bottom + 8; else if (cr.top < sr.top) sc.scrollTop -= sr.top - cr.top + 8; }
 }
 
+let clsCursor = null; // last summary count that was clicked, so a second click cycles
+function classPlies(color, cls){
+  const out = [];
+  if (!S.game) return out;
+  S.game.moves.forEach((m, i) => { if (m.color === color && m.cls === cls) out.push(i + 1); });
+  return out;
+}
 function renderSummary(){
   const g = S.game, el = $('summary');
   if (!g || !g.done) { el.innerHTML = ''; return; }
-  const cnt = {w:{}, b:{}}; g.moves.forEach(m => { cnt[m.color][m.cls] = (cnt[m.color][m.cls]||0) + 1; });
   const a = g.accuracy;
   const ext = g.chessComAcc ? `<tr><td class="muted small">Chess.com's own (if game was reviewed)</td><td class="c small muted">${g.chessComAcc.white != null ? g.chessComAcc.white.toFixed(1) : '–'}</td><td class="c small muted">${g.chessComAcc.black != null ? g.chessComAcc.black.toFixed(1) : '–'}</td></tr>` : '';
+  const cell = (color, cls) => {
+    const plies = classPlies(color, cls);
+    const n = plies.length;
+    const at = plies.indexOf(S.ply);
+    const who = color === 'w' ? (g.headers.White || 'White') : (g.headers.Black || 'Black');
+    const title = n ? (at >= 0 ? `${who}'s ${CLS[cls].name} ${at + 1} of ${n}. Click for the next.` : `Jump to ${who}'s first ${CLS[cls].name}`) : `No ${CLS[cls].name} moves`;
+    return `<td class="c"><button type="button" class="clsjump" style="color:${CLS[cls].color}" data-color="${color}" data-cls="${cls}" data-n="${n}" data-at="${at}" title="${esc(title)}" ${n ? '' : 'disabled'}><span class="cnt">${n}</span>${at >= 0 ? `<span class="k">${at + 1}/${n}</span>` : ''}</button></td>`;
+  };
   el.innerHTML = `<table class="sumtbl">
     <tr><td></td><td class="c">${esc(g.headers.White||'White')}</td><td class="c">${esc(g.headers.Black||'Black')}</td></tr>
     <tr class="acc"><td><b>Accuracy</b></td><td class="c"><span class="accbox" id="accW">${a.w != null ? a.w.toFixed(1) : '–'}</span></td><td class="c"><span class="accbox b" id="accB">${a.b != null ? a.b.toFixed(1) : '–'}</span></td></tr>
     ${ext}
-    ${CLS_ORDER.map(c => `<tr><td><span class="lab">${icon(c)}${CLS[c].name}</span></td><td class="c" style="color:${CLS[c].color}">${cnt.w[c]||0}</td><td class="c" style="color:${CLS[c].color}">${cnt.b[c]||0}</td></tr>`).join('')}
+    ${CLS_ORDER.map(c => `<tr><td><span class="lab">${icon(c)}${CLS[c].name}</span></td>${cell('w', c)}${cell('b', c)}</tr>`).join('')}
   </table>`;
+}
+function jumpClass(color, cls){
+  if (S.mode === 'puzzles' || !S.game || !S.game.done) return;
+  const plies = classPlies(color, cls);
+  if (!plies.length) return;
+  if (S.explore) { invalidateExplore(); S.explore = null; S.sel = null; S.promo = null; hideGhost(); }
+  const at = plies.indexOf(S.ply);
+  let index;
+  if (clsCursor && clsCursor.color === color && clsCursor.cls === cls) index = ((at >= 0 ? at : clsCursor.index) + 1) % plies.length;
+  else index = 0;
+  clsCursor = {color, cls, index};
+  goto(plies[index]);
 }
 
 function renderGraph(){
@@ -716,8 +749,10 @@ function renderGraph(){
   if (pts.length) s += `<path d="M0,${H} ${pts.map(p=>`L${p[0].toFixed(2)},${p[1].toFixed(2)}`).join(' ')} L${pts[pts.length-1][0].toFixed(2)},${H} Z" fill="#fff"/>`;
   s += `<line x1="0" x2="${W}" y1="${H/2}" y2="${H/2}" stroke="#888" stroke-width=".5" stroke-dasharray="3 3"/>`;
   s += `<line x1="${X(S.ply)}" x2="${X(S.ply)}" y1="0" y2="${H}" stroke="#81b64c" stroke-width="2" vector-effect="non-scaling-stroke"/>`;
-  g.moves.forEach((m,i) => { if (['blunder','mistake','miss','brilliant','great','inaccuracy'].includes(m.cls) && g.evals[i+1])
-    s += `<circle cx="${X(i+1)}" cy="${Y(g.evals[i+1])}" r="${m.cls==='inaccuracy'?2.2:3.2}" fill="${CLS[m.cls].color}" stroke="#000" stroke-width=".4" vector-effect="non-scaling-stroke"/>`; });
+  g.moves.forEach((m,i) => { if (['blunder','mistake','miss','brilliant','great','inaccuracy'].includes(m.cls) && g.evals[i+1]) {
+    const big = m.cls === 'blunder' || m.cls === 'mistake';
+    s += `<g class="gdot" data-ply="${i+1}"><title>${esc(CLS[m.cls].name)} · ${esc(m.san)}</title><circle cx="${X(i+1)}" cy="${Y(g.evals[i+1])}" r="${big ? 4.2 : 3}" fill="${CLS[m.cls].color}" stroke="#000" stroke-width=".4" vector-effect="non-scaling-stroke"/></g>`;
+  } });
   el.innerHTML = s;
 }
 
@@ -731,7 +766,7 @@ function goto(p){
   if (!S.game) return;
   S.sel = null; S.promo = null; hideGhost();
   S.ply = clamp(p, 0, S.game.fens.length - 1);
-  renderBoard(); renderEvalBar(); renderPlayers(); renderCoach(); renderMoves(); renderGraph(); renderExplore();
+  renderBoard(); renderEvalBar(); renderPlayers(); renderCoach(); renderMoves(); renderGraph(); renderSummary(); renderExplore();
 }
 
 /* ================= Classification ================= */
@@ -841,6 +876,7 @@ async function startReview(game, preferColor){
   const gen = ++S.gen;
   exploreJob++;
   S.explore = null; S.sel = null; S.promo = null; hideGhost();
+  clsCursor = null;
   engine.stop();
   S.game = game; S.ply = 0;
   S.flipped = preferColor === 'b';
@@ -1364,10 +1400,26 @@ $('moves').onclick = e => {
   if (S.explore) { invalidateExplore(); S.explore = null; S.sel = null; S.promo = null; hideGhost(); }
   goto(+m.dataset.ply);
 };
+$('summary').onclick = e => {
+  const b = e.target.closest('.clsjump');
+  if (!b || b.disabled) return;
+  jumpClass(b.dataset.color, b.dataset.cls);
+};
 $('graph').onclick = e => {
-  if (!S.game) return;
+  if (!S.game || S.mode === 'puzzles') return;
   const r = $('graph').getBoundingClientRect();
-  const p = Math.round((e.clientX - r.left) / r.width * (S.game.fens.length - 1));
+  let p = Math.round((e.clientX - r.left) / r.width * (S.game.fens.length - 1));
+  const dot = e.target.closest && e.target.closest('.gdot');
+  if (dot) p = +dot.dataset.ply;
+  else {
+    let best = null, bestD = 12;
+    $('graph').querySelectorAll('.gdot').forEach(d => {
+      const box = d.getBoundingClientRect();
+      const dist = Math.hypot(e.clientX - (box.left + box.width / 2), e.clientY - (box.top + box.height / 2));
+      if (dist < bestD) { bestD = dist; best = +d.dataset.ply; }
+    });
+    if (best != null) p = best;
+  }
   if (S.explore) { invalidateExplore(); S.explore = null; S.sel = null; S.promo = null; hideGhost(); }
   goto(p);
 };
