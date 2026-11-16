@@ -12,6 +12,7 @@ A single-file web app that pulls your games from Chess.com's public API and revi
 - The username box defaults to **LucasMazza**. Click **Load games**, pick a month, then click a game to review it.
 - `?user=SomeName` in the URL preloads a different Chess.com username (for example https://lucasmazza42.github.io/chess-review/?user=Hikaru).
 - Or paste any standard-chess PGN in **Paste a PGN instead**.
+- **Try a move:** once the review finishes, drag or click pieces on the board (legal moves only; promoting pawns open a piece picker). The try is classified with the same labels as the game and compared with the move that was played, for example `Your try Nf3: Excellent (+0.8) vs game move Bc4: Mistake (-0.6)`. Stockfish updates the eval bar, the best-move arrow, and the top lines. Check **Play vs engine** to let the engine answer for the other side, or leave it off and move both sides. The variation is a sub-line in the move list — step it with ← →, **Undo** takes a move back, and **Back to game** returns to the main line. Arrow keys keep working. Trying moves does not change the saved review.
 
 Needs an internet connection: Chess.com's public API, plus Stockfish, chess.js, piece images, and the opening list from CDNs (all `https://`).
 
